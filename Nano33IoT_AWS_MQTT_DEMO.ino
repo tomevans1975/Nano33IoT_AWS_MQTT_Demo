@@ -124,24 +124,35 @@ bool connectWiFi() {
 // CONNECT TO AWS IoT CORE WITH TLS + ECC CERTIFICATE
 // -----------------------------------------------------------------------------
 bool connectMQTT_TLS() {
-  Serial.print("Resolving AWS endpoint: ");
-  Serial.println(AWS_ENDPOINT);
+  // Initialize TLS clock (used when cert verification is enabled)
+  ArduinoBearSSL.onGetTime([]() { return (uint32_t)WiFi.getTime(); });
 
-  ssl.setEccSlot(0, device_cert_der, sizeof(device_cert_der));
-  ssl.setTrustAnchors(AWS_ROOT_CA);
+  // Client authentication: ECC slot 0 + your device certificate (DER)
+  // (device_cert_der/device_cert_der_len come from device_cert_der.h)
+  ssl.setEccSlot(0, device_cert_der, device_cert_der_len);
 
-  ssl.setSNIHostname(AWS_ENDPOINT);
+  // Try to enable secure server verification using the Root CA PEM.
+  bool ca_ok = configureAwsRootCA(ssl);
 
-  Serial.print("Connecting to AWS IoT MQTT broker ... ");
-  if (!mqtt.connect(AWS_ENDPOINT, MQTT_PORT)) {
+  if (!ca_ok) {
+    // TEMPORARY fallback: skip server verification but keep SNI ON (enum 1).
+    // This keeps mTLS client auth intact while you add proper trust anchors.
+    ssl.setInsecure((BearSSLClient::SNI)1);
+    Serial.println("⚠️  Root CA helper not available — running TEMPORARILY without server verification.");
+  }
+
+  // Connect using the hostname (ensures SNI uses AWS endpoint)
+  const int port = 8883;
+  if (!mqtt.connect(AWS_ENDPOINT, port)) {
     Serial.print("❌ MQTT connect failed: ");
     Serial.println(mqtt.connectError());
     return false;
   }
 
-  Serial.println("✅ MQTT connected securely to AWS IoT Core");
+  Serial.println("✅ MQTT connected to AWS IoT Core");
   return true;
 }
+
 
 // -----------------------------------------------------------------------------
 // HANDLE INCOMING MESSAGE

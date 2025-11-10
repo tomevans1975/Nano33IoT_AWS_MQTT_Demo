@@ -3,7 +3,17 @@
 
 #include <ArduinoBearSSL.h>
 
-static const char AWS_ROOT_CA_STRING[] PROGMEM = R"EOF(
+// If your toolchain provides the X.509 helper, include it (secure path).
+// Some Arduino installs don't have this header; we guard it below.
+#if __has_include(<ArduinoBearSSLX509.h>)
+  #include <ArduinoBearSSLX509.h>
+  #define HAS_BEARSSL_X509 1
+#else
+  #define HAS_BEARSSL_X509 0
+#endif
+
+// Amazon Root CA 1 – used to verify AWS IoT Core's server certificate
+static const char AWS_ROOT_CA_PEM[] PROGMEM = R"PEM(
 -----BEGIN CERTIFICATE-----
 MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
 ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6
@@ -24,10 +34,18 @@ o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU
 5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy
 rqXRfboQnoZsG4q5WTP468SQvvG5
 -----END CERTIFICATE-----
-)EOF";
+)PEM";
 
-static const br_x509_trust_anchor AWS_ROOT_CA[] PROGMEM = {
-  { nullptr, nullptr, 0 }
-};
-
+// Helper to configure server verification. Returns true if secure verification enabled.
+inline bool configureAwsRootCA(BearSSLClient& ssl) {
+#if HAS_BEARSSL_X509
+  BearSSLX509List roots(AWS_ROOT_CA_PEM);
+  ssl.setTrustAnchors(&roots);      // secure: verify AWS server cert
+  return true;
+#else
+  // No X509 helper available. Caller should fall back to a temporary insecure mode.
+  return false;
 #endif
+}
+
+#endif // AWS_ROOT_CA_H
