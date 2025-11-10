@@ -100,19 +100,27 @@ flowchart LR
 sequenceDiagram
     participant Device as Nano 33 IoT
     participant Broker as AWS IoT MQTT Broker
-    participant Console as AWS Test Client
+    participant CloudSub as AWS Subscribers<br/>(e.g. Test Client, Rule)
+    participant CloudPub as AWS Test Client<br/>(Publisher)
 
-    Device->>Broker: CONNECT (mTLS)
-    Broker-->>Device: CONNACK (Success)
+    %% --- Connection phase ---
+    Device->>Broker: CONNECT (mTLS using cert + key)
+    Broker-->>Device: CONNACK (Authenticated)
 
-    loop Every 5 s
-        Device->>Broker: PUBLISH uptime → tomevans/nano33iot/telemetry
+    %% --- Periodic telemetry publish ---
+    loop Every 5 seconds
+        Device->>Broker: PUBLISH "tomevans/nano33iot/telemetry"<br/>{ "uptime_ms": #### }
+        Broker-->>CloudSub: MESSAGE on "tomevans/nano33iot/telemetry"
     end
 
-    Console->>Broker: PUBLISH "LED ON" → tomevans/nano33iot/cmd
-    Broker-->>Device: MESSAGE "LED ON"
-    Device->>Broker: PUBLISH {"led":true} → tomevans/nano33iot/state
-    Broker-->>Console: MESSAGE {"led":true}
+    %% --- Command from AWS to device ---
+    CloudPub->>Broker: PUBLISH "tomevans/nano33iot/cmd"<br/>Payload: "LED ON"
+    Broker-->>Device: MESSAGE on "tomevans/nano33iot/cmd"
+
+    %% --- Device response and state update ---
+    Device->>Broker: PUBLISH "tomevans/nano33iot/state"<br/>{ "led": true }
+    Broker-->>CloudSub: MESSAGE on "tomevans/nano33iot/state"
+
 ```
 
 ---
