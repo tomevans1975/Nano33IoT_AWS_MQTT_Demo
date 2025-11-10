@@ -50,23 +50,6 @@ This project is intended to be as simple as possible. It was developed on a Mac 
 
 ---
 
-## 📁 Code Structure
-
-Nano33IoT_AWS_MQTT_Demo/
-│
-├── src/
-│ ├── Nano33IoT_AWS_MQTT_Demo.ino
-│ ├── credentials.h
-│ ├── device_cert_der.h
-│ ├── aws_root_ca.h
-│
-└── README.md
-
-
-> ⚠️ `credentials.h` is **not committed** publicly — it contains Wi-Fi and endpoint credentials.
-
----
-
 ## 🔒 Cybersecurity Concepts
 
 | Component | Location | Purpose |
@@ -81,19 +64,32 @@ Nano33IoT_AWS_MQTT_Demo/
 ## 🧭 Certificate Relationships
 
 ```mermaid
-graph TD
-  subgraph Device
-    A[ATECC608A<br/>Private Key]
-    B[Device Certificate - DER]
+flowchart LR
+  %% === Styles ===
+  classDef hw fill:#e8f1ff,stroke:#2b6cb0,stroke-width:1px,color:#1a365d;
+  classDef cloud fill:#e9fbe8,stroke:#2f855a,stroke-width:1px,color:#22543d;
+  classDef file fill:#fff4e6,stroke:#c05621,stroke-width:1px,color:#7b341e;
+
+  %% === Device side ===
+  subgraph Device["Arduino Nano 33 IoT"]
+    A[ATECC608A<br/>Private Key<br/>Non-exportable]:::hw
+    B[Device Certificate<br/>device_cert_der.h]:::file
+    C[Amazon Root CA 1<br/>aws_root_ca.h]:::file
   end
-  subgraph AWS_IoT_Core
-    C[AWS Root CA 1]
-    D[Policy + Thing]
+
+  %% === Cloud side ===
+  subgraph AWS["AWS IoT Core"]
+    D[AWS IoT MQTT Broker]:::cloud
+    E[AWS Root CA<br/>Trusted by device]:::cloud
+    F[AWS IoT Policy<br/>Topic permissions]:::cloud
   end
-  A -->|CSR Signed| B
-  B -->|mTLS Auth| AWS_Broker[(AWS MQTT Broker)]
-  C --> AWS_Broker
-  AWS_Broker --> D
+
+  %% === Relationships ===
+  A -->|Signs TLS handshake| D
+  B -->|Presents identity X.509 cert| D
+  C -->|Verifies AWS server| E
+  D -->|Authorizes actions| F
+
 ```
 
 ---
